@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ContaPráctica · Ajustes y hoja de trabajo</title>
+<meta name="theme-color" content="#0d1117">
+<style>
+:root{--bg: #0d1117;--panel: #161b22;--border:#30363d;--tx: #e6edf3;--sub: #8b949e;--ac: #8b5cf6;--ok:#2f9e6e;--err:#d64545;--warn:#d29922}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:var(--bg);color:var(--tx);padding:14px;max-width:900px;margin:0 auto;font-size:14px}
+header{display:flex;align-items:center;gap:10px;padding:4px 0 14px;flex-wrap:wrap}
+h1{font-size:19px}
+.sub{font-size:12px;color:var(--sub);flex:1}
+.ico{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--ac),#6d28d9);display:flex;align-items:center;justify-content:center;font-size:18px}
+.barra{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.tab{padding:9px 13px;border-radius:10px;border:1px solid var(--border);background:var(--panel);color:var(--sub);font:inherit;font-size:13px;cursor:pointer}
+.tab.on{color:#fff;background:linear-gradient(135deg,var(--ac),#6d28d9);border-color:transparent}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px}
+.card h2{font-size:15px;margin-bottom:4px}
+.card .d{font-size:12.5px;color:var(--sub);margin-bottom:12px}
+label{display:block;font-size:12px;color:var(--sub);margin:10px 0 4px}
+input[type=text],input[type=number],select{width:100%;padding:9px;border-radius:10px;border:1px solid var(--border);background:#ffffff;color:#111111;font:inherit;font-size:14px}
+input::placeholder{color:#6e7781}
+table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+th,td{border:1px solid var(--border);padding:7px 8px;text-align:right;min-width:70px}
+th{background:#0d1117;color:var(--sub);font-weight:600;font-size:12px}
+td.l,th.l{text-align:left}
+tr.tot td{font-weight:700;background:#0d1117}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 16px;border-radius:12px;border:none;background:linear-gradient(135deg,var(--ac),#6d28d9);color:#fff;font:inherit;font-size:14px;cursor:pointer}
+.btn.sec{background:transparent;border:1px solid var(--border);color:var(--tx)}
+.btn.pel{background:transparent;border:1px solid var(--err);color:var(--err)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.row>div{flex:1;min-width:110px}
+.mini{padding:4px 9px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--tx);font:inherit;font-size:12.5px;cursor:pointer}
+.res{font-size:13px;background:#0d1117;border:1px solid var(--border);border-radius:12px;padding:12px;margin-top:12px;line-height:1.7}
+.res b.ok{color:var(--ok)}.res b.er{color:var(--err)}.res b.wa{color:var(--warn)}
+.aj{font-family:ui-monospace,monospace;font-size:12px;color:var(--sub);margin-top:8px}
+.aj div{padding:2px 0;border-bottom:1px dashed var(--border)}
+.neg{color:var(--err)}
+.pos{color:var(--ok)}
+</style>
+<style id="lf-tema">html,body{background:#0d1117 !important;color:#e6edf3 !important;font-family:ui-monospace,Menlo,Consolas,monospace !important;font-size:19px !important}</style></head>
+<body>
+<header>
+  <div class="ico">📒</div>
+  <div><h1>ContaPráctica</h1><span class="sub">Saldos, ajustes y hoja de trabajo de 11 columnas · todo local</span></div>
+  <button class="btn pel" id="bReset" style="flex:0 1 auto">Restablecer</button>
+</header>
+<nav class="barra" id="tabs"></nav>
+<main id="contenido"></main>
+
+<script>
+/* ================= utilidades ================= */
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num = s => { const n = parseFloat(String(s == null ? 0 : s).replace(/\./g,'').replace(',','.')); return isNaN(n) ? 0 : n; };
+const fmt = n => (Math.round(n * 100) / 100).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const RUBROS = { A: 'Activo', PP: 'Pasivo + PN', RN: 'Resultado negativo', RP: 'Resultado positivo' };
+let TAB = 'saldos';
+
+/* ================= estado ================= */
+function estadoDefecto(){
+  return {
+    cuentas: [
+      { n: 'Caja', rubro: 'A', sd: 0, sa: 0 },
+      { n: 'Bancos', rubro: 'A', sd: 0, sa: 0 },
+      { n: 'Deudores', rubro: 'A', sd: 0, sa: 0 },
+      { n: 'Proveedores', rubro: 'PP', sd: 0, sa: 0 },
+      { n: 'Capital', rubro: 'PP', sd: 0, sa: 0 }
+    ],
+    cajaCuenta: 'Caja',
+    bancoCuenta: 'Bancos',
+    arqueo: { efectivo: 0, items: [] },          // items: {c, m, t:'g'|'a'}
+    banco: { extracto: 0, items: [] },           // items: {c, m, t:'gd'|'ga'|'tr'|'ch'}
+    deudores: { items: [] },                     // items: {n, m, d, p}
+    devengado: { items: [] },                    // items: {t:'g'|'i', c, m}
+    customs: [],                                 // {id, nombre}
+    rubrosExtra: {},                             // cuenta creada por ajustes -> rubro
+    ajustes: []                                  // {o, c, d, h}
+  };
+}
+let S;
+try { S = JSON.parse(localStorage.getItem('conta_v1')) || estadoDefecto(); } catch (e) { S = estadoDefecto(); }
+if (!Array.isArray(S.cuentas)) S = estadoDefecto();
+function guardar(){ localStorage.setItem('conta_v1', JSON.stringify(S)); }
+
+/* ================= motor de ajustes ================= */
+function saldoCuenta(nombre, excluirOrigen){
+  const c = S.cuentas.find(x => x.n.trim().toLowerCase() === String(nombre).trim().toLowerCase());
+  let s = c ? num(c.sd) - num(c.sa) : 0;
+  S.ajustes.forEach(a => {
+    if (excluirOrigen && a.o === excluirOrigen) return;
+    if (a.c.trim().toLowerCase() === String(nombre).trim().toLowerCase()) s += num(a.d) - num(a.h);
+  });
+  return s;
+}
+function ajustesModulos(){
+  const out = [];
+  // ---- arqueo de caja ----
+  const libro = saldoCuenta(S.cajaCuenta, 'arqueo');
+  let comp = 0;
+  S.arqueo.items.forEach(it => { comp += num(it.m); out.push({ o: 'arqueo', c: it.c, d: num(it.m), h: 0, det: 'Ítem sin registrar (arqueo)' }); });
+  const dif = libro - (num(S.arqueo.efectivo) + comp);
+  if (Math.abs(dif) > 0.004){
+    if (dif > 0) out.push({ o: 'arqueo', c: 'Faltante de caja', d: dif, h: 0, det: 'Faltante de caja' });
+    else out.push({ o: 'arqueo', c: 'Sobrante de caja', d: 0, h: -dif, det: 'Sobrante de caja' });
+  }
+  // ítems del arqueo salen de caja
+  S.arqueo.items.forEach(it => out.push({ o: 'arqueo', c: S.cajaCuenta, d: 0, h: num(it.m), det: 'Contra caja (arqueo)' }));
+  if (Math.abs(dif) > 0.004) out.push({ o: 'arqueo', c: S.cajaCuenta, d: dif < 0 ? -dif : 0, h: dif > 0 ? dif : 0, det: 'Diferencia de arqueo en caja' });
+  // ---- conciliación bancaria (solo ajustan los del lado libro) ----
+  S.banco.items.forEach(it => {
+    if (it.t === 'gd') { out.push({ o: 'banco', c: it.c, d: num(it.m), h: 0, det: 'Cargo bancario' }); out.push({ o: 'banco', c: S.bancoCuenta, d: 0, h: num(it.m), det: 'Contra bancos' }); }
+    if (it.t === 'ga') { out.push({ o: 'banco', c: S.bancoCuenta, d: num(it.m), h: 0, det: 'Abono bancario' }); out.push({ o: 'banco', c: it.c, d: 0, h: num(it.m), det: 'Contra bancos' }); }
+  });
+  // ---- depuración de deudores ----
+  let incobrable = 0;
+  S.deudores.items.forEach(it => incobrable += num(it.m) * num(it.p) / 100);
+  if (incobrable > 0.004){
+    out.push({ o: 'deudores', c: 'Gasto por incobrables', d: incobrable, h: 0, det: 'Depuración de deudores' });
+    out.push({ o: 'deudores', c: 'Provisión para incobrables', d: 0, h: incobrable, det: 'Depuración de deudores' });
+  }
+  // ---- devengados ----
+  S.devengado.items.forEach(it => {
+    if (it.t === 'g') { out.push({ o: 'devengado', c: it.c, d: num(it.m), h: 0, det: 'Gasto devengado' }); out.push({ o: 'devengado', c: 'Gastos devengados a pagar', d: 0, h: num(it.m), det: 'Gasto devengado' }); }
+    else { out.push({ o: 'devengado', c: 'Ingresos devengados a cobrar', d: num(it.m), h: 0, det: 'Ingreso devengado' }); out.push({ o: 'devengado', c: it.c, d: 0, h: num(it.m), det: 'Ingreso devengado' }); }
+  });
+  return out;
+}
+function todosAjustes(){
+  const mod = ['arqueo', 'banco', 'deudores', 'devengado'];
+  return S.ajustes.filter(a => !mod.includes(a.o)).concat(ajustesModulos());
+}
+
+/* ================= planilla de 11 columnas ================= */
+function planilla(){
+  const filas = S.cuentas.filter(c => c.n.trim()).map(c => ({ n: c.n.trim(), rubro: c.rubro, sd: num(c.sd), sa: num(c.sa) }));
+  // cuentas que aparecen solo por ajustes (ej.: Faltante de caja, Provision para incobrables)
+  const movsPrev = todosAjustes();
+  const conocidas = {};
+  filas.forEach(f => conocidas[f.n.toLowerCase()] = 1);
+  movsPrev.forEach(a => {
+    const n = a.c.trim();
+    if (n && !conocidas[n.toLowerCase()]) {
+      conocidas[n.toLowerCase()] = 1;
+      filas.push({ n, rubro: S.rubrosExtra[n] || '', sd: 0, sa: 0, extra: true });
+    }
+  });
+  // capital automático
+  const tsd = filas.reduce((a, f) => a + f.sd, 0), tsa = filas.reduce((a, f) => a + f.sa, 0);
+  const dif = tsd - tsa;
+  if (Math.abs(dif) > 0.004) filas.push({ n: 'Capital (automático)', rubro: 'PP', sd: dif < 0 ? -dif : 0, sa: dif > 0 ? dif : 0 });
+  const movs = todosAjustes();
+  filas.forEach(f => {
+    let mD = 0, mA = 0;
+    movs.forEach(a => { if (a.c.trim().toLowerCase() === f.n.toLowerCase()) { mD += num(a.d); mA += num(a.h); } });
+    f.ad = Math.round(mD * 100) / 100; f.aa = Math.round(mA * 100) / 100;
+    const s = f.sd - f.sa + f.ad - f.aa;
+    f.sad = Math.max(0, Math.round(s * 100) / 100); f.saa = Math.max(0, Math.round(-s * 100) / 100);
+  });
+  const tot = k => filas.reduce((a, f) => a + f[k], 0);
+  return { filas, tot, difSaldo: dif };
+}
+
+/* ================= render pestañas ================= */
+const MODULOS = [
+  { id: 'saldos', nombre: 'Saldos iniciales' },
+  { id: 'arqueo', nombre: 'Arqueo de caja' },
+  { id: 'banco', nombre: 'Conciliación bancaria' },
+  { id: 'deudores', nombre: 'Depuración de deudores' },
+  { id: 'devengado', nombre: 'Devengados' }
+];
+function pintarBarra(){
+  const t = [];
+  MODULOS.forEach(m => t.push('<button class="tab' + (TAB === m.id ? ' on' : '') + '" data-tab="' + m.id + '">' + m.nombre + '</button>'));
+  S.customs.forEach(c => t.push('<button class="tab' + (TAB === 'c_' + c.id ? ' on' : '') + '" data-tab="c_' + c.id + '">✏️ ' + esc(c.nombre) + '</button>'));
+  t.push('<button class="tab' + (TAB === 'planilla' ? ' on' : '') + '" data-tab="planilla">📊 Planilla</button>');
+  t.push('<button class="tab" id="bNueva">＋ Nueva pestaña</button>');
+  $('tabs').innerHTML = t.join('');
+  document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { TAB = b.dataset.tab; pintar(); });
+  $('bNueva').onclick = () => {
+    const nombre = prompt('Nombre de la nueva pestaña (ej.: Vales recibidos, Documentos a pagar…):');
+    if (!nombre || !nombre.trim()) return;
+    const id = Date.now();
+    S.customs.push({ id, nombre: nombre.trim() });
+    guardar(); TAB = 'c_' + id; pintar();
+  };
+}
+
+/* ---------- pestaña saldos ---------- */
+function vistaSaldos(){
+  const optsCaja = S.cuentas.map(c => '<option' + (c.n === S.cajaCuenta ? ' selected' : '') + '>' + esc(c.n) + '</option>').join('');
+  let filas = S.cuentas.map((c, i) =>
+    '<tr><td class="l"><input type="text" value="' + esc(c.n) + '" data-f="cn" data-i="' + i + '"></td>' +
+    '<td><select data-f="cr" data-i="' + i + '">' + Object.keys(RUBROS).map(r => '<option value="' + r + '"' + (c.rubro === r ? ' selected' : '') + '>' + RUBROS[r] + '</option>').join('') + '</select></td>' +
+    '<td><input type="number" value="' + c.sd + '" data-f="csd" data-i="' + i + '"></td>' +
+    '<td><input type="number" value="' + c.sa + '" data-f="csa" data-i="' + i + '"></td>' +
+    '<td><button class="mini" data-del="' + i + '">✕</button></td></tr>').join('');
+  $('contenido').innerHTML =
+    '<div class="card"><h2>Saldos iniciales</h2>' +
+    '<div class="d">Volcá los saldos de cada cuenta. Si Activos ≠ Pasivo+PN, la app crea la cuenta <b>Capital (automático)</b> con la diferencia en la planilla.</div>' +
+    '<table><tr><th class="l">Cuenta</th><th class="l">Rubro</th><th>Saldo deudor</th><th>Saldo acreedor</th><th></th></tr>' +
+    filas + '</table>' +
+    '<div style="margin-top:12px"><button class="btn sec" id="bAddC">＋ Agregar cuenta</button></div>' +
+    '<div class="row" style="margin-top:14px"><div><label>Cuenta que representa la Caja (para arqueo)</label><select id="selCaja">' + optsCaja + '</select></div>' +
+    '<div><label>Cuenta que representa Bancos (para conciliación)</label><select id="selBanco">' + S.cuentas.map(c => '<option' + (c.n === S.bancoCuenta ? ' selected' : '') + '>' + esc(c.n) + '</option>').join('') + '</select></div></div></div>';
+  $('bAddC').onclick = () => { S.cuentas.push({ n: '', rubro: 'A', sd: 0, sa: 0 }); guardar(); pintar(); };
+  document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { S.cuentas.splice(+b.dataset.del, 1); guardar(); pintar(); });
+  document.querySelectorAll('[data-f]').forEach(el => el.onchange = () => {
+    const i = +el.dataset.i, v = el.value;
+    if (el.dataset.f === 'cn') S.cuentas[i].n = v;
+    if (el.dataset.f === 'cr') S.cuentas[i].rubro = v;
+    if (el.dataset.f === 'csd') S.cuentas[i].sd = num(v);
+    if (el.dataset.f === 'csa') S.cuentas[i].sa = num(v);
+    guardar();
+  });
+  $('selCaja').onchange = e => { S.cajaCuenta = e.target.value; guardar(); };
+  $('selBanco').onchange = e => { S.bancoCuenta = e.target.value; guardar(); };
+}
+
+/* ---------- arqueo ---------- */
+function vistaArqueo(){
+  const libro = saldoCuenta(S.cajaCuenta, 'arqueo');
+  const items = S.arqueo.items.map((it, i) =>
+    '<tr><td class="l"><input type="text" value="' + esc(it.c) + '" data-f="ac" data-i="' + i + '" placeholder="Concepto / cuenta (ej.: Servicios pagados)"></td>' +
+    '<td><input type="number" value="' + it.m + '" data-f="am" data-i="' + i + '"></td>' +
+    '<td><select data-f="at" data-i="' + i + '"><option value="g"' + (it.t === 'g' ? ' selected' : '') + '>Gasto sin registrar</option><option value="a"' + (it.t === 'a' ? ' selected' : '') + '>Ítem a cobrar (vale vista…)</option></select></td>' +
+    '<td><button class="mini" data-del="' + i + '">✕</button></td></tr>').join('');
+  const comp = S.arqueo.items.reduce((a, it) => a + num(it.m), 0);
+  const dif = libro - (num(S.arqueo.efectivo) + comp);
+  const aj = ajustesModulos().filter(a => a.o === 'arqueo');
+  $('contenido').innerHTML =
+    '<div class="card"><h2>Arqueo de caja</h2>' +
+    '<div class="d">Saldo según libro de <b>' + esc(S.cajaCuenta) + '</b> (incluye otros ajustes ya cargados): <b>' + fmt(libro) + '</b></div>' +
+    '<div class="row"><div><label>Efectivo contado físicamente</label><input type="number" id="arqEf" value="' + S.arqueo.efectivo + '"></div></div>' +
+    '<label>Ítems encontrados sin registrar</label>' +
+    '<table><tr><th class="l">Concepto (será la cuenta)</th><th>Monto</th><th>Tipo</th><th></th></tr>' + items + '</table>' +
+    '<div style="margin-top:10px"><button class="btn sec" id="bAddI">＋ Ítem</button></div>' +
+    '<div class="res">Total ítems/comprobantes: <b>' + fmt(comp) + '</b><br>' +
+    'Efectivo + comprobantes: <b>' + fmt(num(S.arqueo.efectivo) + comp) + '</b><br>' +
+    (Math.abs(dif) < 0.005 ? 'Sin diferencia ✓' : dif > 0
+      ? 'Faltante de caja: <b class="er">' + fmt(dif) + '</b>'
+      : 'Sobrante de caja: <b class="ok">' + fmt(-dif) + '</b>') +
+    '<div class="aj">' + (aj.length ? 'Ajustes que genera:<br>' + aj.map(a =>
+      '<div>' + esc(a.c) + ' — Debe ' + fmt(a.d) + ' / Haber ' + fmt(a.h) + ' <span style="opacity:.6">(' + esc(a.det) + ')</span></div>').join('') : 'Sin ajustes todavía.') + '</div></div></div>';
+  $('arqEf').onchange = e => { S.arqueo.efectivo = num(e.target.value); guardar(); pintar(); };
+  $('bAddI').onclick = () => { S.arqueo.items.push({ c: '', m: 0, t: 'g' }); guardar(); pintar(); };
+  document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { S.arqueo.items.splice(+b.dataset.del, 1); guardar(); pintar(); });
+  document.querySelectorAll('[data-f]').forEach(el => el.onchange = () => {
+    const i = +el.dataset.i;
+    if (el.dataset.f === 'ac') S.arqueo.items[i].c = el.value;
+    if (el.dataset.f === 'am') S.arqueo.items[i].m = num(el.value);
+    if (el.dataset.f === 'at') S.arqueo.items[i].t = el.value;
+    guardar(); pintar();
+  });
+}
+
+/* ---------- conciliación bancaria ---------- */
+function vistaBanco(){
+  const libro = saldoCuenta(S.bancoCuenta, 'banco');
+  let abonos = 0, cargos = 0, transito = 0, cheques = 0;
+  const items = S.banco.items.map((it, i) =>
+    '<tr><td class="l"><input type="text" value="' + esc(it.c) + '" data-f="bc" data-i="' + i + '" placeholder="Concepto"></td>' +
+    '<td><input type="number" value="' + it.m + '" data-f="bm" data-i="' + i + '"></td>' +
+    '<td><select data-f="bt" data-i="' + i + '">' +
+    '<option value="gd"' + (it.t === 'gd' ? ' selected' : '') + '>Cargo del banco (ajusta libro)</option>' +
+    '<option value="ga"' + (it.t === 'ga' ? ' selected' : '') + '>Abono del banco (ajusta libro)</option>' +
+    '<option value="tr"' + (it.t === 'tr' ? ' selected' : '') + '>Depósito en tránsito</option>' +
+    '<option value="ch"' + (it.t === 'ch' ? ' selected' : '') + '>Cheque emitido no cobrado</option>' +
+    '</select></td><td><button class="mini" data-del="' + i + '">✕</button></td></tr>').join('');
+  S.banco.items.forEach(it => {
+    if (it.t === 'gd') cargos += num(it.m);
+    if (it.t === 'ga') abonos += num(it.m);
+    if (it.t === 'tr') transito += num(it.m);
+    if (it.t === 'ch') cheques += num(it.m);
+  });
+  const libroAj = libro + abonos - cargos;
+  const conciliado = num(S.banco.extracto) + transito - cheques;
+  const aj = ajustesModulos().filter(a => a.o === 'banco');
+  $('contenido').innerHTML =
+    '<div class="card"><h2>Conciliación bancaria</h2>' +
+    '<div class="d">Saldo según libro de <b>' + esc(S.bancoCuenta) + '</b> (sin los ajustes de esta pestaña): <b>' + fmt(libro) + '</b></div>' +
+    '<div class="row"><div><label>Saldo según extracto bancario</label><input type="number" id="banEx" value="' + S.banco.extracto + '"></div></div>' +
+    '<label>Diferencias encontradas</label>' +
+    '<table><tr><th class="l">Concepto</th><th>Monto</th><th>Tipo</th><th></th></tr>' + items + '</table>' +
+    '<div style="margin-top:10px"><button class="btn sec" id="bAddB">＋ Diferencia</button></div>' +
+    '<div class="res">Saldo del libro ajustado: <b>' + fmt(libroAj) + '</b><br>' +
+    'Saldo conciliado (extracto ' + fmt(num(S.banco.extracto)) + ' + tránsitos ' + fmt(transito) + ' − cheques ' + fmt(cheques) + '): <b>' + fmt(conciliado) + '</b><br>' +
+    (Math.abs(libroAj - conciliado) < 0.005
+      ? '<b class="ok">Conciliación cuadrada ✓</b>'
+      : '<b class="er">No cuadra por ' + fmt(Math.abs(libroAj - conciliado)) + '</b> — revisá los datos') +
+    '<div class="aj">' + (aj.length ? 'Ajustes que genera (solo los del lado libro):<br>' + aj.map(a =>
+      '<div>' + esc(a.c) + ' — Debe ' + fmt(a.d) + ' / Haber ' + fmt(a.h) + '</div>').join('') : 'Sin ajustes de libro.') + '</div></div></div>';
+  $('banEx').onchange = e => { S.banco.extracto = num(e.target.value); guardar(); pintar(); };
+  $('bAddB').onclick = () => { S.banco.items.push({ c: '', m: 0, t: 'gd' }); guardar(); pintar(); };
+  document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { S.banco.items.splice(+b.dataset.del, 1); guardar(); pintar(); });
+  document.querySelectorAll('[data-f]').forEach(el => el.onchange = () => {
+    const i = +el.dataset.i;
+    if (el.dataset.f === 'bc') S.banco.items[i].c = el.value;
+    if (el.dataset.f === 'bm') S.banco.items[i].m = num(el.value);
+    if (el.dataset.f === 'bt') S.banco.items[i].t = el.value;
+    guardar(); pintar();
+  });
+}
+
+/* ---------- depuración de deudores ---------- */
+function vistaDeudores(){
+  const items = S.deudores.items.map((it, i) =>
+    '<tr><td class="l"><input type="text" value="' + esc(it.n) + '" data-f="dn" data-i="' + i + '" placeholder="Deudor"></td>' +
+    '<td><input type="number" value="' + it.m + '" data-f="dm" data-i="' + i + '"></td>' +
+    '<td><select data-f="dd" data-i="' + i + '">' +
+    ['0', '30', '60', '90', '120'].map(d => '<option value="' + d + '"' + (String(it.d) === d ? ' selected' : '') + '>' + (d === '0' ? 'Al corriente' : d + ' días' + (d === '120' ? ' o más' : '')) + '</option>').join('') +
+    '</select></td>' +
+    '<td><input type="number" value="' + it.p + '" data-f="dp" data-i="' + i + '" step="0.01"></td>' +
+    '<td>' + fmt(num(it.m) * num(it.p) / 100) + '</td>' +
+    '<td><button class="mini" data-del="' + i + '">✕</button></td></tr>').join('');
+  const total = S.deudores.items.reduce((a, it) => a + num(it.m), 0);
+  const incob = S.deudores.items.reduce((a, it) => a + num(it.m) * num(it.p) / 100, 0);
+  const aj = ajustesModulos().filter(a => a.o === 'deudores');
+  $('contenido').innerHTML =
+    '<div class="card"><h2>Depuración de deudores</h2>' +
+    '<div class="d">Antigüedad de cuentas por cobrar y porcentaje estimado de incobrabilidad (editable por deudor).</div>' +
+    '<table><tr><th class="l">Deudor</th><th>Monto</th><th>Antigüedad</th><th>% incobrable</th><th>Incobrable</th><th></th></tr>' +
+    items + '<tr class="tot"><td class="l">Totales</td><td>' + fmt(total) + '</td><td></td><td></td><td>' + fmt(incob) + '</td><td></td></tr></table>' +
+    '<div style="margin-top:10px"><button class="btn sec" id="bAddD">＋ Deudor</button></div>' +
+    '<div class="res">Estimación total de incobrables: <b>' + fmt(incob) + '</b>' +
+    '<div class="aj">' + (aj.length ? 'Ajuste que genera:<br>' + aj.map(a =>
+      '<div>' + esc(a.c) + ' — Debe ' + fmt(a.d) + ' / Haber ' + fmt(a.h) + '</div>').join('') : 'Sin ajuste (incobrable = 0).') + '</div></div></div>';
+  $('bAddD').onclick = () => { S.deudores.items.push({ n: '', m: 0, d: 0, p: 0 }); guardar(); pintar(); };
+  document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { S.deudores.items.splice(+b.dataset.del, 1); guardar(); pintar(); });
+  document.querySelectorAll('[data-f]').forEach(el => el.onchange = () => {
+    const i = +el.dataset.i;
+    if (el.dataset.f === 'dn') S.deudores.items[i].n = el.value;
+    if (el.dataset.f === 'dm') S.deudores.items[i].m = num(el.value);
+    if (el.dataset.f === 'dd') S.deudores.items[i].d = +el.value;
+    if (el.dataset.f === 'dp') S.deudores.items[i].p = num(el.value);
+    guardar(); pintar();
+  });
+}
+
+/* ---------- devengados ---------- */
+function vistaDevengado(){
+  const items = S.devengado.items.map((it, i) =>
+    '<tr><td><select data-f="vt" data-i="' + i + '"><option value="g"' + (it.t === 'g' ? ' selected' : '') + '>Gasto devengado</option><option value="i"' + (it.t === 'i' ? ' selected' : '') + '>Ingreso devengado</option></select></td>' +
+    '<td class="l"><input type="text" value="' + esc(it.c) + '" data-f="vc" data-i="' + i + '" placeholder="Concepto / cuenta"></td>' +
+    '<td><input type="number" value="' + it.m + '" data-f="vm" data-i="' + i + '"></td>' +
+    '<td><button class="mini" data-del="' + i + '">✕</button></td></tr>').join('');
+  const aj = ajustesModulos().filter(a => a.o === 'devengado');
+  $('contenido').innerHTML =
+    '<div class="card"><h2>Asientos devengados</h2>' +
+    '<div class="d">Gastos incurridos no pagados ni registrados, e ingresos ganados no cobrados. El contravalor va a las cuentas corrientes (a pagar / a cobrar).</div>' +
+    '<table><tr><th>Tipo</th><th class="l">Concepto (será la cuenta)</th><th>Monto</th><th></th></tr>' + items + '</table>' +
+    '<div style="margin-top:10px"><button class="btn sec" id="bAddV">＋ Devengado</button></div>' +
+    '<div class="res"><div class="aj">' + (aj.length ? 'Ajustes que genera:<br>' + aj.map(a =>
+      '<div>' + esc(a.c) + ' — Debe ' + fmt(a.d) + ' / Haber ' + fmt(a.h) + '</div>').join('') : 'Sin ajustes todavía.') + '</div></div></div>';
+  $('bAddV').onclick = () => { S.devengado.items.push({ t: 'g', c: '', m: 0 }); guardar(); pintar(); };
+  document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { S.devengado.items.splice(+b.dataset.del, 1); guardar(); pintar(); });
+  document.querySelectorAll('[data-f]').forEach(el => el.onchange = () => {
+    const i = +el.dataset.i;
+    if (el.dataset.f === 'vt') S.devengado.items[i].t = el.value;
+    if (el.dataset.f === 'vc') S.devengado.items[i].c = el.value;
+    if (el.dataset.f === 'vm') S.devengado.items[i].m = num(el.value);
+    guardar(); pintar();
+  });
+}
+
+/* ---------- pestañas personalizadas ---------- */
+function vistaCustom(cid){
+  const cta = S.customs.find(c => c.id === cid);
+  if (!cta) { TAB = 'saldos'; pintar(); return; }
+  const aj = S.ajustes.map((a, idx) => ({ ref: a, idx })).filter(x => x.ref.o === 'c_' + cid);
+  const filas = aj.map((x, i) =>
+    '<tr><td class="l"><input type="text" value="' + esc(x.ref.c) + '" data-f="xc" data-i="' + i + '" placeholder="Cuenta"></td>' +
+    '<td><input type="number" value="' + x.ref.d + '" data-f="xd" data-i="' + i + '" placeholder="Debe"></td>' +
+    '<td><input type="number" value="' + x.ref.h + '" data-f="xh" data-i="' + i + '" placeholder="Haber"></td>' +
+    '<td class="l"><input type="text" value="' + esc(x.ref.det || '') + '" data-f="xt" data-i="' + i + '" placeholder="Detalle"></td>' +
+    '<td><button class="mini" data-del="' + i + '">✕</button></td></tr>').join('');
+  $('contenido').innerHTML =
+    '<div class="card"><h2>' + esc(cta.nombre) + '</h2>' +
+    '<div class="d">Ajustes manuales de esta pestaña. Escribí la cuenta afectada y el importe en Debe o en Haber (la otra en 0).</div>' +
+    '<table><tr><th class="l">Cuenta</th><th>Debe</th><th>Haber</th><th class="l">Detalle</th><th></th></tr>' + filas + '</table>' +
+    '<div style="margin-top:10px" class="row">' +
+    '<button class="btn sec" id="bAddX">＋ Línea de ajuste</button>' +
+    '<button class="btn pel" id="bDelTab" style="flex:0 1 auto">🗑 Eliminar pestaña</button></div></div>';
+  $('bAddX').onclick = () => { S.ajustes.push({ o: 'c_' + cid, c: '', d: 0, h: 0, det: '' }); guardar(); pintar(); };
+  $('bDelTab').onclick = () => {
+    if (!confirm('¿Eliminar la pestaña "' + cta.nombre + '" y sus ajustes?')) return;
+    S.ajustes = S.ajustes.filter(a => a.o !== 'c_' + cid);
+    S.customs = S.customs.filter(c => c.id !== cid);
+    guardar(); TAB = 'saldos'; pintar();
+  };
+  document.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    S.ajustes.splice(aj[+b.dataset.del].idx, 1); guardar(); pintar();
+  });
+  document.querySelectorAll('[data-f]').forEach(el => el.onchange = () => {
+    const a = aj[+el.dataset.i].ref;
+    if (el.dataset.f === 'xc') a.c = el.value;
+    if (el.dataset.f === 'xd') a.d = num(el.value);
+    if (el.dataset.f === 'xh') a.h = num(el.value);
+    if (el.dataset.f === 'xt') a.det = el.value;
+    guardar();
+  });
+}
+
+/* ---------- planilla ---------- */
+function vistaPlanilla(){
+  const P = planilla();
+  const f = P.filas;
+  const t = P.tot;
+  const cols = [
+    ['sd', 'Saldo deudor'], ['sa', 'Saldo acreedor'],
+    ['ad', 'Ajustes deudor'], ['aa', 'Ajustes acreedor'],
+    ['sad', 'Saldo aj. deudor'], ['saa', 'Saldo aj. acreedor']
+  ];
+  let sinRubro = 0;
+  let filas = f.map((x, i) => {
+    const celdaRubro = x.extra
+      ? '<select data-rub="' + i + '"><option value="">(sin rubro)</option>' + Object.keys(RUBROS).map(r =>
+          '<option value="' + r + '"' + (x.rubro === r ? ' selected' : '') + '>' + RUBROS[r] + '</option>').join('') + '</select>'
+      : '';
+    if (x.extra && !x.rubro) sinRubro++;
+    return '<tr><td class="l">' + esc(x.n) + (x.extra ? ' <span style="color:var(--warn);font-size:11px">(por ajuste)</span> ' + celdaRubro : '') + '</td>' +
+    '<td>' + (x.sd ? fmt(x.sd) : '') + '</td><td>' + (x.sa ? fmt(x.sa) : '') + '</td>' +
+    '<td>' + (x.ad ? fmt(x.ad) : '') + '</td><td>' + (x.aa ? fmt(x.aa) : '') + '</td>' +
+    '<td>' + (x.sad ? fmt(x.sad) : '') + '</td><td>' + (x.saa ? fmt(x.saa) : '') + '</td>' +
+    '<td class="' + (x.rubro === 'A' && x.sad - x.saa !== 0 ? (x.sad ? 'pos' : 'neg') : '') + '">' + (x.rubro === 'A' ? fmt(x.sad - x.saa) : '') + '</td>' +
+    '<td class="' + (x.rubro === 'PP' && x.sad - x.saa !== 0 ? (x.saa ? 'pos' : 'neg') : '') + '">' + (x.rubro === 'PP' ? fmt(x.saa - x.sad) : '') + '</td>' +
+    '<td>' + (x.rubro === 'RN' ? fmt(x.sad - x.saa) : '') + '</td>' +
+    '<td>' + (x.rubro === 'RP' ? fmt(x.saa - x.sad) : '') + '</td></tr>';
+  }).join('');
+  const totalRow = '<tr class="tot"><td class="l">SUMAS</td>' +
+    '<td>' + fmt(t('sd')) + '</td><td>' + fmt(t('sa')) + '</td>' +
+    '<td>' + fmt(t('ad')) + '</td><td>' + fmt(t('aa')) + '</td>' +
+    '<td>' + fmt(t('sad')) + '</td><td>' + fmt(t('saa')) + '</td>' +
+    '<td>' + fmt(f.reduce((a, x) => a + (x.rubro === 'A' ? x.sad - x.saa : 0), 0)) + '</td>' +
+    '<td>' + fmt(f.reduce((a, x) => a + (x.rubro === 'PP' ? x.saa - x.sad : 0), 0)) + '</td>' +
+    '<td>' + fmt(f.reduce((a, x) => a + (x.rubro === 'RN' ? x.sad - x.saa : 0), 0)) + '</td>' +
+    '<td>' + fmt(f.reduce((a, x) => a + (x.rubro === 'RP' ? x.saa - x.sad : 0), 0)) + '</td></tr>';
+  const A = f.reduce((a, x) => a + (x.rubro === 'A' ? x.sad - x.saa : 0), 0);
+  const PP = f.reduce((a, x) => a + (x.rubro === 'PP' ? x.saa - x.sad : 0), 0);
+  const RN = f.reduce((a, x) => a + (x.rubro === 'RN' ? x.sad - x.saa : 0), 0);
+  const RP = f.reduce((a, x) => a + (x.rubro === 'RP' ? x.saa - x.sad : 0), 0);
+  const cuadraSaldos = Math.abs(t('sd') - t('sa')) < 0.005;
+  const cuadraAj = Math.abs(t('sad') - t('saa')) < 0.005;
+  const resultado = RP - RN;
+  $('contenido').innerHTML =
+    '<div class="card"><h2>Planilla de 11 columnas</h2>' +
+    '<div class="d">Se vuelcan automáticamente: saldos iniciales, todos los ajustes de las pestañas, saldos ajustados y la clasificación por rubro de cada cuenta (definida en Saldos iniciales).</div>' +
+    '<div style="overflow-x:auto"><table><tr><th class="l">Cuentas</th>' +
+    '<th>Saldos deudor</th><th>Saldos acreedor</th><th>Ajustes deudor</th><th>Ajustes acreedor</th>' +
+    '<th>Saldo aj. deudor</th><th>Saldo aj. acreedor</th><th>Activo</th><th>Pasivo + PN</th><th>Result. negativo</th><th>Result. positivo</th></tr>' +
+    filas + totalRow + '</table></div>' +
+    '<div class="res">' +
+    'Sumas de saldos: ' + (cuadraSaldos ? '<b class="ok">cuadran ✓</b>' : '<b class="er">NO cuadran (' + fmt(t('sd')) + ' vs ' + fmt(t('sa')) + ')</b>') + '<br>' +
+    'Sumas de saldos ajustados: ' + (cuadraAj ? '<b class="ok">cuadran ✓</b>' : '<b class="er">NO cuadran</b>') + '<br>' +
+    'Activo: <b>' + fmt(A) + '</b> · Pasivo+PN: <b>' + fmt(PP) + '</b> · Resultado del ejercicio (RP − RN): <b class="' + (resultado >= 0 ? 'ok' : 'er') + '">' + fmt(resultado) + '</b>' +
+    (sinRubro ? '<br><b class="wa">' + sinRubro + ' cuenta(s) creadas por ajustes sin rubro — asignales Activo / Pasivo+PN / Resultado para completar la clasificación.</b>' : '') +
+    (Math.abs(difSaldoCheck(A, PP, RN, RP)) < 0.005
+      ? '<br><b class="ok">La ecuación A + RN = P + PN + RP cuadra ✓</b>'
+      : '<br><b class="er">La ecuación no cuadra por ' + fmt(Math.abs(difSaldoCheck(A, PP, RN, RP))) + '</b> — revisá los rubros asignados') +
+    '</div>' +
+    '<div style="margin-top:12px"><button class="btn sec" id="bCsv">⬇️ Exportar planilla (CSV)</button></div></div>';
+  function difSaldoCheck(a, pp, rn, rp){ return a + rn - pp - rp; }
+  document.querySelectorAll('[data-rub]').forEach(el => el.onchange = () => {
+    const f = P.filas[+el.dataset.rub];
+    if (el.value) S.rubrosExtra[f.n] = el.value;
+    else delete S.rubrosExtra[f.n];
+    guardar(); pintar();
+  });
+  $('bCsv').onclick = () => {
+    const lineas = [['Cuentas','Saldos deudor','Saldos acreedor','Ajustes deudor','Ajustes acreedor','Saldo aj. deudor','Saldo aj. acreedor','Activo','Pasivo + PN','Resultado negativo','Resultado positivo']];
+    f.forEach(x => lineas.push([x.n, x.sd, x.sa, x.ad, x.aa, x.sad, x.saa,
+      x.rubro === 'A' ? x.sad - x.saa : '', x.rubro === 'PP' ? x.saa - x.sad : '',
+      x.rubro === 'RN' ? x.sad - x.saa : '', x.rubro === 'RP' ? x.saa - x.sad : '']));
+    const csv = lineas.map(l => l.join(';')).join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv' });
+    const u = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = u; a.download = 'planilla.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 5000);
+  };
+}
+
+/* ================= router ================= */
+function pintar(){
+  pintarBarra();
+  if (TAB === 'saldos') vistaSaldos();
+  else if (TAB === 'arqueo') vistaArqueo();
+  else if (TAB === 'banco') vistaBanco();
+  else if (TAB === 'deudores') vistaDeudores();
+  else if (TAB === 'devengado') vistaDevengado();
+  else if (TAB === 'planilla') vistaPlanilla();
+  else if (TAB.indexOf('c_') === 0) vistaCustom(+TAB.slice(2));
+}
+$('bReset').onclick = () => {
+  if (!confirm('¿Borrar TODO (cuentas, ajustes y pestañas)?')) return;
+  localStorage.removeItem('conta_v1');
+  S = estadoDefecto(); TAB = 'saldos'; pintar();
+};
+pintar();
+</script>
+</body>
+</html>
